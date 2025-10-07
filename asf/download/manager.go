@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,6 +19,24 @@ import (
 	internalhttp "github.com/example/go-asf/asf/internal/http"
 	"github.com/example/go-asf/asf/model"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	edlClientID  = "BO_n7nTIlMljdvU6kRRB3g"
+	ursHost      = "urs.earthdata.nasa.gov"
+	asfAuthHost  = "auth.asf.alaska.edu"
+	authRedirect = "https://auth.asf.alaska.edu/login"
+	maxRedirects = 10
+)
+
+var (
+	authDomains     = []string{"asf.alaska.edu", "earthdata.nasa.gov"}
+	authCookieNames = map[string]struct{}{
+		"urs_user_already_logged":     {},
+		"uat_urs_user_already_logged": {},
+		"asf-urs":                     {},
+		"urs-access-token":            {},
+	}
 )
 
 // BasicAuth holds credentials for HTTP basic authentication.
@@ -77,6 +96,12 @@ func (m *manager) Download(ctx context.Context, client *http.Client, userAgent s
 		return errors.New("product contains no downloadable files")
 	}
 
+	dlClient := m.clientForDownload(client, userAgent)
+
+	if err := m.ensureAuth(ctx, dlClient, userAgent); err != nil {
+		return err
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 	sem := make(chan struct{}, m.cfg.Concurrency)
 
@@ -90,7 +115,7 @@ func (m *manager) Download(ctx context.Context, client *http.Client, userAgent s
 			}
 			defer func() { <-sem }()
 
-			return m.downloadFile(ctx, client, userAgent, product.ID, destDir, f)
+			return m.downloadFile(ctx, dlClient, userAgent, product.ID, destDir, f)
 		})
 	}
 
@@ -109,7 +134,7 @@ func (m *manager) downloadFile(ctx context.Context, client *http.Client, userAge
 	if userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
 	}
-	if m.cfg.BasicAuth != nil && m.cfg.BasicAuth.Username != "" {
+	if m.cfg.BasicAuth != nil && m.cfg.BasicAuth.Username != "" && hostRequiresAuth(req.URL.Hostname()) {
 		req.SetBasicAuth(m.cfg.BasicAuth.Username, m.cfg.BasicAuth.Password)
 	}
 
@@ -196,6 +221,103 @@ func (m *manager) downloadFile(ctx context.Context, client *http.Client, userAge
 	}
 
 	return nil
+}
+
+func (m *manager) ensureAuth(ctx context.Context, client *http.Client, userAgent string) error {
+	if m.cfg.BasicAuth == nil || m.cfg.BasicAuth.Username == "" {
+		return nil
+	}
+	if client.Jar == nil {
+		jar, err := cookiejar.New(nil)
+		if err != nil {
+			return fmt.Errorf("create cookie jar: %w", err)
+		}
+		client.Jar = jar
+	}
+	if hasAuthCookies(client.Jar) {
+		return nil
+	}
+
+	loginURL := fmt.Sprintf("https://%s/oauth/authorize?client_id=%s&response_type=code&redirect_uri=%s", ursHost, edlClientID, url.QueryEscape(authRedirect))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, loginURL, nil)
+	if err != nil {
+		return fmt.Errorf("prepare login request: %w", err)
+	}
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	}
+	if hostRequiresAuth(req.URL.Hostname()) {
+		req.SetBasicAuth(m.cfg.BasicAuth.Username, m.cfg.BasicAuth.Password)
+	}
+
+	resp, err := internalhttp.Do(ctx, client, req, nil)
+	if err != nil {
+		return fmt.Errorf("authenticate with earthdata: %w", err)
+	}
+	resp.Body.Close()
+
+	if !hasAuthCookies(client.Jar) {
+		return errors.New("earthdata authentication failed: login cookies not set")
+	}
+	return nil
+}
+
+func (m *manager) clientForDownload(base *http.Client, userAgent string) *http.Client {
+	if m.cfg.BasicAuth == nil || m.cfg.BasicAuth.Username == "" {
+		return base
+	}
+
+	clone := *base
+	clone.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		if len(via) > 0 {
+			req.Header = via[len(via)-1].Header.Clone()
+		}
+		if userAgent != "" {
+			req.Header.Set("User-Agent", userAgent)
+		}
+		if hostRequiresAuth(req.URL.Hostname()) {
+			req.SetBasicAuth(m.cfg.BasicAuth.Username, m.cfg.BasicAuth.Password)
+		} else {
+			req.Header.Del("Authorization")
+		}
+		return nil
+	}
+	return &clone
+}
+
+func hostRequiresAuth(host string) bool {
+	lower := strings.ToLower(host)
+	for _, domain := range authDomains {
+		if lower == domain || strings.HasSuffix(lower, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAuthCookies(jar http.CookieJar) bool {
+	if jar == nil {
+		return false
+	}
+	hosts := []string{
+		fmt.Sprintf("https://%s/", ursHost),
+		fmt.Sprintf("https://%s/", asfAuthHost),
+	}
+	for _, raw := range hosts {
+		u, err := url.Parse(raw)
+		if err != nil {
+			continue
+		}
+		for _, c := range jar.Cookies(u) {
+			if _, ok := authCookieNames[c.Name]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // (rest of file unchanged)

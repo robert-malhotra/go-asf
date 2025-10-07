@@ -14,13 +14,13 @@ import (
 )
 
 func TestLiveSearchAndDownload(t *testing.T) {
-	username, ok := os.LookupEnv("ASF_EARTHDATA_USERNAME")
-	if !ok || username == "" {
-		t.Skip("ASF_EARTHDATA_USERNAME not set; skipping live download test")
+	username := firstNonEmpty(os.Getenv("ASF_EARTHDATA_USERNAME"), os.Getenv("ASF_USERNAME"))
+	if username == "" {
+		t.Skip("ASF_EARTHDATA_USERNAME/ASF_USERNAME not set; skipping live download test")
 	}
-	password, ok := os.LookupEnv("ASF_EARTHDATA_PASSWORD")
-	if !ok {
-		t.Skip("ASF_EARTHDATA_PASSWORD not set; skipping live download test")
+	password := firstNonEmpty(os.Getenv("ASF_EARTHDATA_PASSWORD"), os.Getenv("ASF_PASSWORD"))
+	if password == "" {
+		t.Skip("ASF_EARTHDATA_PASSWORD/ASF_PASSWORD not set; skipping live download test")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -75,4 +75,13 @@ func TestLiveSearchAndDownload(t *testing.T) {
 	if info.Size() == 0 {
 		t.Fatal("downloaded file is empty")
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"path"
 	"time"
@@ -47,6 +48,14 @@ func NewClient(opts ...Option) (*Client, error) {
 		if err := opt(c); err != nil {
 			return nil, err
 		}
+	}
+
+	if c.httpClient.Jar == nil {
+		jar, err := cookiejar.New(nil)
+		if err != nil {
+			return nil, fmt.Errorf("create cookie jar: %w", err)
+		}
+		c.httpClient.Jar = jar
 	}
 
 	return c, nil
