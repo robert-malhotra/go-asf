@@ -13,13 +13,13 @@ func ParamsBuilder() Builder {
 }
 
 // Platform filters by satellite platform (e.g. S1A).
-func (b Builder) Platform(v string) Builder {
+func (b Builder) Platform(v Platform) Builder {
 	b.params.Platform = v
 	return b
 }
 
 // BeamMode filters by beam mode (e.g. IW, EW).
-func (b Builder) BeamMode(v string) Builder {
+func (b Builder) BeamMode(v BeamMode) Builder {
 	b.params.BeamMode = v
 	return b
 }

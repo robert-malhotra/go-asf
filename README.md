@@ -38,8 +38,8 @@ func main() {
     }
 
     params := search.ParamsBuilder().
-        Platform("S1A").
-        BeamMode("IW").
+        Platform(search.PlatformSentinel1A).
+        BeamMode(search.BeamModeIW).
         Polarization("VV").
         StartTime(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)).
         EndTime(time.Date(2023, 1, 31, 23, 59, 59, 0, time.UTC)).

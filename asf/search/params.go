@@ -8,8 +8,8 @@ import (
 
 // Params represents a collection of ASF search filters.
 type Params struct {
-	Platform        string
-	BeamMode        string
+	Platform        Platform
+	BeamMode        BeamMode
 	Polarization    string
 	ProductType     string
 	ProcessingLevel string
@@ -59,10 +59,10 @@ func (p Params) Encode() (url.Values, error) {
 	values := make(url.Values)
 
 	if p.Platform != "" {
-		values.Set("platform", p.Platform)
+		values.Set("platform", p.Platform.String())
 	}
 	if p.BeamMode != "" {
-		values.Set("beamMode", p.BeamMode)
+		values.Set("beamMode", p.BeamMode.String())
 	}
 	if p.Polarization != "" {
 		values.Set("polarization", p.Polarization)
