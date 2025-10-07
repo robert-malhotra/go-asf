@@ -3,7 +3,9 @@
 package asf_test
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,12 +70,32 @@ func TestLiveSearchAndDownload(t *testing.T) {
 		t.Fatalf("expected 1 file, found %d", len(entries))
 	}
 
-	info, err := os.Stat(filepath.Join(dir, entries[0].Name()))
+	path := filepath.Join(dir, entries[0].Name())
+	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("stat downloaded file: %v", err)
 	}
 	if info.Size() == 0 {
 		t.Fatal("downloaded file is empty")
+	}
+
+	fh, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open downloaded file: %v", err)
+	}
+	defer fh.Close()
+
+	header := make([]byte, 256)
+	n, err := fh.Read(header)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read downloaded file: %v", err)
+	}
+	trimmed := bytes.TrimSpace(header[:n])
+	if len(trimmed) > 0 {
+		upper := bytes.ToUpper(trimmed)
+		if bytes.HasPrefix(upper, []byte("<!DOCTYPE")) || bytes.HasPrefix(upper, []byte("<HTML")) {
+			t.Fatalf("downloaded HTML login page instead of data: %q", string(trimmed))
+		}
 	}
 }
 

@@ -96,6 +96,10 @@ func (m *manager) Download(ctx context.Context, client *http.Client, userAgent s
 		return errors.New("product contains no downloadable files")
 	}
 
+	if err := ensureCookieJar(client); err != nil {
+		return err
+	}
+
 	dlClient := m.clientForDownload(client, userAgent)
 
 	if err := m.ensureAuth(ctx, dlClient, userAgent); err != nil {
@@ -146,6 +150,14 @@ func (m *manager) downloadFile(ctx context.Context, client *http.Client, userAge
 
 	if resp.StatusCode != http.StatusOK {
 		return internalhttp.HTTPError(resp)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		lower := strings.ToLower(ct)
+		if strings.Contains(lower, "text/html") || strings.Contains(lower, "application/xhtml") {
+			preview, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+			return fmt.Errorf("unexpected HTML response while downloading %s: %s", file.URL, strings.TrimSpace(string(preview)))
+		}
 	}
 
 	name := file.Name
@@ -268,6 +280,7 @@ func (m *manager) clientForDownload(base *http.Client, userAgent string) *http.C
 	}
 
 	clone := *base
+	clone.Jar = base.Jar
 	clone.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
@@ -318,6 +331,21 @@ func hasAuthCookies(jar http.CookieJar) bool {
 		}
 	}
 	return false
+}
+
+func ensureCookieJar(client *http.Client) error {
+	if client == nil {
+		return errors.New("http client is required")
+	}
+	if client.Jar != nil {
+		return nil
+	}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return fmt.Errorf("create cookie jar: %w", err)
+	}
+	client.Jar = jar
+	return nil
 }
 
 // (rest of file unchanged)
