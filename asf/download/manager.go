@@ -20,6 +20,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// BasicAuth holds credentials for HTTP basic authentication.
+type BasicAuth struct {
+	Username string
+	Password string
+}
+
 // ProgressFunc is invoked as bytes are written for an individual file.
 type ProgressFunc func(FileProgress)
 
@@ -37,6 +43,7 @@ type Config struct {
 	Concurrency int
 	Verify      bool
 	Progress    ProgressFunc
+	BasicAuth   *BasicAuth
 }
 
 // Manager is responsible for downloading product files.
@@ -101,6 +108,9 @@ func (m *manager) downloadFile(ctx context.Context, client *http.Client, userAge
 	}
 	if userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
+	}
+	if m.cfg.BasicAuth != nil && m.cfg.BasicAuth.Username != "" {
+		req.SetBasicAuth(m.cfg.BasicAuth.Username, m.cfg.BasicAuth.Password)
 	}
 
 	resp, err := internalhttp.Do(ctx, client, req, nil)
@@ -188,6 +198,8 @@ func (m *manager) downloadFile(ctx context.Context, client *http.Client, userAge
 	return nil
 }
 
+// (rest of file unchanged)
+
 type progressWriter struct {
 	dst      io.Writer
 	progress ProgressFunc
@@ -204,23 +216,18 @@ func (w *progressWriter) SetHasher(h hash.Hash) {
 }
 
 func (w *progressWriter) Write(p []byte) (int, error) {
+	if w.hasher != nil {
+		if _, err := w.hasher.Write(p); err != nil {
+			return 0, err
+		}
+	}
+
 	n, err := w.dst.Write(p)
 	if n > 0 {
-		if w.hasher != nil {
-			if _, hErr := w.hasher.Write(p[:n]); hErr != nil {
-				return n, hErr
-			}
-		}
 		w.meta.Downloaded += int64(n)
 		if w.progress != nil {
 			w.progress(w.meta)
 		}
 	}
-	if err != nil {
-		return n, err
-	}
-	if n < len(p) {
-		return n, io.ErrShortWrite
-	}
-	return n, nil
+	return n, err
 }

@@ -9,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/example/go-asf/asf/download"
 	internalhttp "github.com/example/go-asf/asf/internal/http"
 	"github.com/example/go-asf/asf/model"
 	"github.com/example/go-asf/asf/search"
@@ -25,6 +26,7 @@ type Client struct {
 	baseURL    *url.URL
 	userAgent  string
 	retry      internalhttp.RetryPolicy
+	basicAuth  *download.BasicAuth
 }
 
 // NewClient constructs a Client configured with the provided options.
@@ -106,6 +108,6 @@ func (c *Client) DownloadProduct(ctx context.Context, product model.Product, des
 		opt(&cfg)
 	}
 
-	cfg.ensureDefaults()
+	cfg.ensureDefaults(c.basicAuth)
 	return cfg.downloader.Download(ctx, c.httpClient, c.userAgent, product, destDir)
 }

@@ -3,6 +3,8 @@ package search
 import (
 	"fmt"
 	"net/url"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -11,7 +13,6 @@ type Params struct {
 	Platform        Platform
 	BeamMode        BeamMode
 	Polarization    string
-	ProductType     string
 	ProcessingLevel string
 	FlightDirection string
 	RelativeOrbit   int
@@ -19,6 +20,10 @@ type Params struct {
 	End             time.Time
 	IntersectsWith  string
 	LookDirection   string
+	Dataset         string
+	Collections     []string
+	GranuleList     []string
+	ProductList     []string
 	MaxResults      int
 	Additional      map[string][]string
 }
@@ -47,6 +52,14 @@ func (p *Params) Add(key string, value string) {
 	p.Additional[key] = append(p.Additional[key], value)
 }
 
+func (p Params) hasAdditional(key string) bool {
+	if p.Additional == nil {
+		return false
+	}
+	_, ok := p.Additional[key]
+	return ok
+}
+
 // Encode serialises the parameters into query string values expected by ASF.
 func (p Params) Encode() (url.Values, error) {
 	if !p.Start.IsZero() && p.End.IsZero() {
@@ -57,6 +70,7 @@ func (p Params) Encode() (url.Values, error) {
 	}
 
 	values := make(url.Values)
+	values.Set("output", "jsonlite")
 
 	if p.Platform != "" {
 		values.Set("platform", p.Platform.String())
@@ -66,9 +80,6 @@ func (p Params) Encode() (url.Values, error) {
 	}
 	if p.Polarization != "" {
 		values.Set("polarization", p.Polarization)
-	}
-	if p.ProductType != "" {
-		values.Set("productType", p.ProductType)
 	}
 	if p.ProcessingLevel != "" {
 		values.Set("processingLevel", p.ProcessingLevel)
@@ -91,7 +102,27 @@ func (p Params) Encode() (url.Values, error) {
 	if p.LookDirection != "" {
 		values.Set("lookDirection", p.LookDirection)
 	}
-	if p.MaxResults > 0 {
+	if p.Dataset != "" {
+		values.Set("dataset", p.Dataset)
+	}
+	if len(p.Collections) > 0 {
+		sorted := append([]string(nil), p.Collections...)
+		sort.Strings(sorted)
+		for _, c := range sorted {
+			if c != "" {
+				values.Add("collections", c)
+			}
+		}
+	}
+	if len(p.GranuleList) > 0 {
+		values.Set("granule_list", strings.Join(p.GranuleList, ","))
+	}
+	if len(p.ProductList) > 0 {
+		values.Set("product_list", strings.Join(p.ProductList, ","))
+	}
+
+	includeMax := p.MaxResults > 0 && len(p.ProductList) == 0 && len(p.GranuleList) == 0 && !p.hasAdditional("product_list") && !p.hasAdditional("granule_list")
+	if includeMax {
 		values.Set("maxResults", fmt.Sprintf("%d", p.MaxResults))
 	}
 

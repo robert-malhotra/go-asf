@@ -13,7 +13,6 @@ func TestBuilderSetsFields(t *testing.T) {
 		Platform(PlatformSentinel1B).
 		BeamMode(BeamModeEW).
 		Polarization("VH").
-		ProductType("RAW").
 		ProcessingLevel("L1").
 		FlightDirection("ASCENDING").
 		RelativeOrbit(128).
@@ -21,6 +20,10 @@ func TestBuilderSetsFields(t *testing.T) {
 		EndTime(end).
 		IntersectsWith("POLYGON((0 0,1 0,1 1,0 1,0 0))").
 		LookDirection("RIGHT").
+		Dataset("TEST").
+		AddCollection("C1").
+		GranuleList("G1", "G2").
+		ProductList("P1").
 		MaxResults(10).
 		Set("k", "v").
 		Add("k", "v2").
@@ -32,7 +35,7 @@ func TestBuilderSetsFields(t *testing.T) {
 	if params.BeamMode != BeamModeEW {
 		t.Fatalf("beam mode mismatch")
 	}
-	if params.Polarization != "VH" || params.ProductType != "RAW" || params.ProcessingLevel != "L1" {
+	if params.Polarization != "VH" || params.ProcessingLevel != "L1" {
 		t.Fatalf("string fields not set")
 	}
 	if params.FlightDirection != "ASCENDING" || params.LookDirection != "RIGHT" {
@@ -43,6 +46,18 @@ func TestBuilderSetsFields(t *testing.T) {
 	}
 	if !params.Start.Equal(start) || !params.End.Equal(end) {
 		t.Fatalf("time fields mismatch")
+	}
+	if params.Dataset != "TEST" {
+		t.Fatalf("dataset not set")
+	}
+	if len(params.Collections) != 1 || params.Collections[0] != "C1" {
+		t.Fatalf("collections not set")
+	}
+	if len(params.GranuleList) != 2 || params.GranuleList[0] != "G1" {
+		t.Fatalf("granule list not set")
+	}
+	if len(params.ProductList) != 1 || params.ProductList[0] != "P1" {
+		t.Fatalf("product list not set")
 	}
 	if params.MaxResults != 10 {
 		t.Fatalf("max results not set")

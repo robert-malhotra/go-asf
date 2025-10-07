@@ -3,38 +3,30 @@ package asf
 import (
 	"context"
 	"net/url"
-	"strconv"
 
 	"github.com/example/go-asf/asf/model"
 )
 
-// ResultIterator provides streaming access to paginated search results.
+// ResultIterator provides streaming access to search results.
 type ResultIterator struct {
-	client    *Client
-	query     url.Values
-	pageSize  int
-	page      int
-	index     int
-	batch     []model.Product
-	lastErr   error
-	exhausted bool
+	client  *Client
+	query   url.Values
+	fetched bool
+	index   int
+	batch   []model.Product
+	lastErr error
 }
 
-func newResultIterator(client *Client, query url.Values, pageSize int) *ResultIterator {
-	if pageSize <= 0 {
-		pageSize = 100
-	}
+func newResultIterator(client *Client, query url.Values, _ int) *ResultIterator {
 	return &ResultIterator{
-		client:   client,
-		query:    cloneValues(query),
-		pageSize: pageSize,
-		page:     1,
+		client: client,
+		query:  cloneValues(query),
 	}
 }
 
 // Next fetches the next product. It returns false when iteration is complete or an error occurred.
 func (it *ResultIterator) Next(ctx context.Context) bool {
-	if it.exhausted {
+	if it.lastErr != nil {
 		return false
 	}
 
@@ -43,17 +35,16 @@ func (it *ResultIterator) Next(ctx context.Context) bool {
 		return true
 	}
 
-	if it.lastErr != nil {
+	if it.fetched {
 		return false
 	}
 
-	if err := it.loadNext(ctx); err != nil {
+	if err := it.load(ctx); err != nil {
 		it.lastErr = err
 		return false
 	}
 
 	if len(it.batch) == 0 {
-		it.exhausted = true
 		return false
 	}
 
@@ -74,21 +65,14 @@ func (it *ResultIterator) Err() error {
 	return it.lastErr
 }
 
-func (it *ResultIterator) loadNext(ctx context.Context) error {
-	it.query.Set("page", strconv.Itoa(it.page))
-	it.query.Set("maxResults", strconv.Itoa(it.pageSize))
-
+func (it *ResultIterator) load(ctx context.Context) error {
 	resp, err := it.client.doSearchRequest(ctx, it.query)
 	if err != nil {
 		return err
 	}
-
 	it.batch = resp.Results
 	it.index = 0
-	it.page++
-	if len(resp.Results) == 0 {
-		it.exhausted = true
-	}
+	it.fetched = true
 	return nil
 }
 

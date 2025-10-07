@@ -9,6 +9,7 @@ type downloadConfig struct {
 	verify      bool
 	progress    download.ProgressFunc
 	downloader  download.Manager
+	basicAuth   *download.BasicAuth
 }
 
 // DownloadOption customises how product files are downloaded.
@@ -46,7 +47,7 @@ func WithDownloader(m download.Manager) DownloadOption {
 	}
 }
 
-func (c *downloadConfig) ensureDefaults() {
+func (c *downloadConfig) ensureDefaults(auth *download.BasicAuth) {
 	if c.concurrency <= 0 {
 		c.concurrency = 2
 	}
@@ -55,6 +56,7 @@ func (c *downloadConfig) ensureDefaults() {
 			Concurrency: c.concurrency,
 			Verify:      c.verify,
 			Progress:    c.progress,
+			BasicAuth:   auth,
 		})
 	}
 }

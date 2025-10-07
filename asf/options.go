@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/example/go-asf/asf/download"
 	internalhttp "github.com/example/go-asf/asf/internal/http"
 )
 
@@ -58,6 +59,17 @@ func WithRetryPolicy(policy internalhttp.RetryPolicy) Option {
 			return fmt.Errorf("retry policy cannot be nil")
 		}
 		c.retry = policy
+		return nil
+	}
+}
+
+// WithBasicAuth configures HTTP basic authentication for product downloads.
+func WithBasicAuth(username, password string) Option {
+	return func(c *Client) error {
+		if username == "" {
+			return fmt.Errorf("username cannot be empty")
+		}
+		c.basicAuth = &download.BasicAuth{Username: username, Password: password}
 		return nil
 	}
 }

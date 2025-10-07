@@ -5,8 +5,9 @@ Go client for interacting with the Alaska Satellite Facility (ASF) search API an
 ## Features
 
 - Query the ASF search endpoint with strongly-typed parameters and a fluent builder.
-- Iterate search results transparently across paginated responses.
+- Iterate search results from ASF's `jsonlite` output format with convenient Go structs.
 - Download product files with configurable concurrency, checksum verification, and progress callbacks.
+- Ship a CLI utility (`asfcli`) for ad-hoc searches and product downloads.
 
 ## Installation
 
@@ -22,6 +23,7 @@ package main
 import (
     "context"
     "log"
+    "os"
     "time"
 
     "github.com/example/go-asf/asf"
@@ -32,6 +34,7 @@ func main() {
     ctx := context.Background()
     client, err := asf.NewClient(
         asf.WithUserAgent("my-app/1.0"),
+        asf.WithBasicAuth(os.Getenv("ASF_EARTHDATA_USERNAME"), os.Getenv("ASF_EARTHDATA_PASSWORD")),
     )
     if err != nil {
         log.Fatal(err)
@@ -40,9 +43,8 @@ func main() {
     params := search.ParamsBuilder().
         Platform(search.PlatformSentinel1A).
         BeamMode(search.BeamModeIW).
-        Polarization("VV").
-        StartTime(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)).
-        EndTime(time.Date(2023, 1, 31, 23, 59, 59, 0, time.UTC)).
+        ProcessingLevel("METADATA").
+        MaxResults(1).
         Build()
 
     iter, err := client.Search(ctx, params)
@@ -62,7 +64,35 @@ func main() {
 }
 ```
 
+> **Note:** ASF downloads require NASA Earthdata credentials. Provide them via the `ASF_EARTHDATA_USERNAME` and `ASF_EARTHDATA_PASSWORD` environment variables or the CLI flags shown below.
+
+## CLI
+
+Build the CLI and perform a small search against the live ASF service:
+
+```bash
+go build ./cmd/asfcli
+./asfcli search --platform=S1A --beam-mode=IW --processing-level=METADATA --max-results=1
+```
+
+Download a product into a destination directory (credentials may be supplied via flags or the `ASF_USERNAME`/`ASF_PASSWORD` environment variables):
+
+```bash
+./asfcli download \
+  --product-id "S1A_IW_RAW__0SDV_20251007T131700_20251007T131718_061320_07A682_5386-METADATA_RAW" \
+  --dest ./downloads \
+  --username "$ASF_EARTHDATA_USERNAME" \
+  --password "$ASF_EARTHDATA_PASSWORD"
+```
+
+## Live test
+
+A network-enabled integration test is available behind the `live` build tag. It requires valid Earthdata credentials exported as `ASF_EARTHDATA_USERNAME` and `ASF_EARTHDATA_PASSWORD`:
+
+```bash
+ASF_EARTHDATA_USERNAME=your-user ASF_EARTHDATA_PASSWORD=your-pass go test -tags=live ./...
+```
+
 ## License
 
 MIT
-
