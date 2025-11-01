@@ -43,6 +43,7 @@ type Platform = string
 const (
 	PlatformSentinel1A Platform = "Sentinel-1A"
 	PlatformSentinel1B Platform = "Sentinel-1B"
+	PlatformSentinel1C Platform = "Sentinel-1C"
 	PlatformSentinel1  Platform = "Sentinel-1"
 )
 
@@ -519,7 +520,7 @@ func encodeSearchOptions(opts SearchOptions) url.Values {
 
 // Common parameter helpers similar to asf_search enumerations.
 var (
-	PlatformsSentinel1 = []Platform{PlatformSentinel1A, PlatformSentinel1B}
+	PlatformsSentinel1 = []Platform{PlatformSentinel1A, PlatformSentinel1B, PlatformSentinel1C}
 	BeamModesIW        = []BeamMode{BeamModeIW}
 	PolarizationsVVVH  = []Polarization{PolarizationVV, PolarizationVH}
 )
