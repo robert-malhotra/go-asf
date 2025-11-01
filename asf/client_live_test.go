@@ -18,8 +18,8 @@ func TestLiveSearchSentinel1SLC(t *testing.T) {
 
 	client := NewClient()
 	basicOpts := SearchOptions{
-		Platforms:       []string{"Sentinel-1A", "Sentinel-1B"},
-		ProcessingLevel: []string{"SLC"},
+		Platforms:       []Platform{PlatformSentinel1A, PlatformSentinel1B},
+		ProcessingLevel: []ProcessingLevel{ProcessingLevelSLC},
 		MaxResults:      5,
 	}
 
@@ -66,8 +66,8 @@ func TestLiveSearchSentinel1GRD(t *testing.T) {
 
 	client := NewClient()
 	basicOpts := SearchOptions{
-		Platforms:       []string{"Sentinel-1A", "Sentinel-1B"},
-		ProcessingLevel: []string{"GRD_MD"},
+		Platforms:       []Platform{PlatformSentinel1A, PlatformSentinel1B},
+		ProcessingLevel: []ProcessingLevel{ProcessingLevelGRDMD},
 		MaxResults:      5,
 	}
 

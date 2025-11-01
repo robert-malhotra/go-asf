@@ -25,7 +25,7 @@ func TestSearchSuccess(t *testing.T) {
 			t.Fatalf("expected bearer token, got %q", got)
 		}
 		q := r.URL.Query()
-		if got := q.Get("platform"); got != "Sentinel-1A" {
+		if got := q.Get("platform"); got != PlatformSentinel1A {
 			t.Fatalf("expected platform Sentinel-1A, got %s", got)
 		}
 		if got := q.Get("output"); got != "geojson" {
@@ -42,11 +42,11 @@ func TestSearchSuccess(t *testing.T) {
 			Features: []feature{{
 				ID: "S1",
 				Properties: featureProps{
-					Platform:        "Sentinel-1A",
-					BeamMode:        "IW",
-					Polarization:    "VV",
-					ProcessingLevel: "L1",
-					ProductType:     "SLC",
+					Platform:        PlatformSentinel1A,
+					BeamMode:        BeamModeIW,
+					Polarization:    PolarizationVV,
+					ProcessingLevel: ProcessingLevelL1,
+					ProductType:     ProductTypeSLC,
 					StartTime:       "2023-01-01T00:00:00Z",
 					SizeMB:          numericValue(50.5),
 					Files:           []fileInfo{{URL: server.URL + "/file"}},
@@ -60,7 +60,7 @@ func TestSearchSuccess(t *testing.T) {
 	defer server.Close()
 
 	opts := SearchOptions{
-		Platforms: []string{"Sentinel-1A"},
+		Platforms: []Platform{PlatformSentinel1A},
 		Start:     time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 		Extra:     url.Values{"extra": {"value"}},
 	}
@@ -83,7 +83,7 @@ func TestSearchSuccess(t *testing.T) {
 	if len(got.FileURLs) != 1 || got.FileURLs[0] != server.URL+"/file" {
 		t.Fatalf("unexpected file URLs: %v", got.FileURLs)
 	}
-	if got.ProductType != "SLC" {
+	if got.ProductType != ProductTypeSLC {
 		t.Fatalf("unexpected product type: %s", got.ProductType)
 	}
 }
@@ -140,7 +140,7 @@ func TestGeoSearchHelper(t *testing.T) {
 		if r.URL.Query().Get("intersectsWith") != "POLYGON" {
 			t.Fatalf("expected intersectsWith query")
 		}
-		if r.URL.Query().Get("platform") != "Sentinel-1A" {
+		if r.URL.Query().Get("platform") != PlatformSentinel1A {
 			t.Fatalf("expected platform parameter")
 		}
 		json.NewEncoder(w).Encode(featureCollection{})
@@ -148,7 +148,7 @@ func TestGeoSearchHelper(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(WithBaseURL(server.URL))
-	if _, err := client.GeoSearch(ctx, "POLYGON", GeoSearchOptions{SearchOptions: SearchOptions{Platforms: []string{"Sentinel-1A"}}}); err != nil {
+	if _, err := client.GeoSearch(ctx, "POLYGON", GeoSearchOptions{SearchOptions: SearchOptions{Platforms: []Platform{PlatformSentinel1A}}}); err != nil {
 		t.Fatalf("GeoSearch returned error: %v", err)
 	}
 }

@@ -36,6 +36,93 @@ type Client struct {
 	session *Session
 }
 
+// Platform represents a supported mission/platform identifier recognized by ASF search APIs.
+// The provided constants cover commonly used missions but callers may supply any valid platform string.
+type Platform = string
+
+const (
+	PlatformSentinel1A Platform = "Sentinel-1A"
+	PlatformSentinel1B Platform = "Sentinel-1B"
+	PlatformSentinel1  Platform = "Sentinel-1"
+)
+
+// BeamMode enumerates radar beam mode values for Sentinel-1 style missions.
+type BeamMode = string
+
+const (
+	BeamModeIW BeamMode = "IW"
+	BeamModeEW BeamMode = "EW"
+	BeamModeSM BeamMode = "SM"
+	BeamModeWV BeamMode = "WV"
+)
+
+// Polarization enumerates common SAR polarization strings.
+type Polarization = string
+
+const (
+	PolarizationHH Polarization = "HH"
+	PolarizationHV Polarization = "HV"
+	PolarizationVV Polarization = "VV"
+	PolarizationVH Polarization = "VH"
+	PolarizationQP Polarization = "QP"
+)
+
+// ProductType represents an ASF product type identifier.
+type ProductType = string
+
+const (
+	ProductTypeSLC      ProductType = "SLC"
+	ProductTypeGRD      ProductType = "GRD"
+	ProductTypeGRDMD    ProductType = "GRD_MD"
+	ProductTypeOCN      ProductType = "OCN"
+	ProductTypeRAW      ProductType = "RAW"
+	ProductTypeMETADATA ProductType = "METADATA"
+)
+
+// CollectionName denotes an ASF collection value.
+type CollectionName = string
+
+const (
+	CollectionSentinel1 CollectionName = "SENTINEL-1"
+)
+
+// ProcessingLevel enumerates the processing level strings reported by ASF search.
+type ProcessingLevel = string
+
+const (
+	ProcessingLevelL0    ProcessingLevel = "L0"
+	ProcessingLevelL1    ProcessingLevel = "L1"
+	ProcessingLevelL2    ProcessingLevel = "L2"
+	ProcessingLevelSLC   ProcessingLevel = "SLC"
+	ProcessingLevelGRD   ProcessingLevel = "GRD"
+	ProcessingLevelGRDMD ProcessingLevel = "GRD_MD"
+)
+
+// LookDirection describes the look direction parameter accepted by ASF search.
+type LookDirection = string
+
+const (
+	LookDirectionLeft  LookDirection = "LEFT"
+	LookDirectionRight LookDirection = "RIGHT"
+)
+
+// FlightDirection enumerates valid flight direction filters.
+type FlightDirection = string
+
+const (
+	FlightDirectionAscending  FlightDirection = "ASCENDING"
+	FlightDirectionDescending FlightDirection = "DESCENDING"
+)
+
+// StackSort specifies the stack sort key accepted by ASF stack searches.
+type StackSort = string
+
+const (
+	StackSortPerpendicularBaselineAsc  StackSort = "BPERP_ASCENDING"
+	StackSortPerpendicularBaselineDesc StackSort = "BPERP_DESCENDING"
+	StackSortPerpendicularBaseline     StackSort = "BPERP"
+)
+
 // Option mutates the client when constructing it.
 type Option func(*Client)
 
@@ -95,23 +182,23 @@ func NewClient(opts ...Option) *Client {
 
 // SearchOptions captures supported query parameters for ASF search.
 type SearchOptions struct {
-	Platforms       []string
-	BeamModes       []string
-	Polarizations   []string
-	ProductTypes    []string
-	Collections     []string
-	ProcessingLevel []string
-	LookDirections  []string
+	Platforms       []Platform
+	BeamModes       []BeamMode
+	Polarizations   []Polarization
+	ProductTypes    []ProductType
+	Collections     []CollectionName
+	ProcessingLevel []ProcessingLevel
+	LookDirections  []LookDirection
 	Start           time.Time
 	End             time.Time
 	RelativeOrbit   string
-	FlightDirection string
+	FlightDirection FlightDirection
 	IntersectsWith  string
 	GranuleIDs      []string
 	StackName       string
 	Master          string
 	Slave           string
-	StackSort       string
+	StackSort       StackSort
 	StackSceneCount int
 	MaxResults      int
 	Page            int
@@ -121,12 +208,12 @@ type SearchOptions struct {
 // Product describes a normalized result from ASF search.
 type Product struct {
 	GranuleID       string
-	Platform        string
+	Platform        Platform
 	Acquisition     time.Time
-	ProcessingLevel string
-	ProductType     string
-	Polarization    string
-	BeamMode        string
+	ProcessingLevel ProcessingLevel
+	ProductType     ProductType
+	Polarization    Polarization
+	BeamMode        BeamMode
 	SizeMB          float64
 	DownloadURL     string
 	FileURLs        []string
@@ -309,8 +396,8 @@ type GranuleSearchOptions struct {
 // ProductSearchOptions customizes product searches.
 type ProductSearchOptions struct {
 	SearchOptions
-	ProductTypes []string
-	Collections  []string
+	ProductTypes []ProductType
+	Collections  []CollectionName
 }
 
 // StackSearchOptions customizes stack searches.
@@ -432,9 +519,9 @@ func encodeSearchOptions(opts SearchOptions) url.Values {
 
 // Common parameter helpers similar to asf_search enumerations.
 var (
-	PlatformsSentinel1 = []string{"Sentinel-1A", "Sentinel-1B"}
-	BeamModesIW        = []string{"IW"}
-	PolarizationsVVVH  = []string{"VV", "VH"}
+	PlatformsSentinel1 = []Platform{PlatformSentinel1A, PlatformSentinel1B}
+	BeamModesIW        = []BeamMode{BeamModeIW}
+	PolarizationsVVVH  = []Polarization{PolarizationVV, PolarizationVH}
 )
 
 func (c *Client) downloadURL(ctx context.Context, downloadURL, destPath string) error {
