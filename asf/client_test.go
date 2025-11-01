@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +14,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 func TestSearchSuccess(t *testing.T) {
@@ -220,6 +226,73 @@ func TestDownload(t *testing.T) {
 	}
 }
 
+func TestDownloadS3(t *testing.T) {
+	ctx := context.Background()
+	expiration := time.Now().Add(30 * time.Minute).UTC().Format("2006-01-02 15:04:05-07:00")
+	var credentialRequests int
+	credServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		credentialRequests++
+		fmt.Fprintf(w, `{"accessKeyId":"AKIA","secretAccessKey":"SECRET","sessionToken":"TOKEN","expiration":"%s"}`, expiration)
+	}))
+	defer credServer.Close()
+
+	client := NewClient(WithS3CredentialsURL(credServer.URL), WithAuthToken("token"))
+	cfg, ok := client.s3.(*s3Config)
+	if !ok {
+		t.Fatalf("expected *s3Config, got %T", client.s3)
+	}
+
+	mock := &mockS3Downloader{content: []byte("s3data")}
+	cfg.newDownloader = func(cfg aws.Config) s3Downloader {
+		mock.cfg = cfg
+		return mock
+	}
+
+	product := Product{FileURLs: []string{"s3://sentinel-bucket/path/file.dat"}}
+	dest := filepath.Join(t.TempDir(), "file.dat")
+	if err := client.Download(ctx, product, dest); err != nil {
+		t.Fatalf("Download returned error: %v", err)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != "s3data" {
+		t.Fatalf("unexpected s3 file contents: %q", data)
+	}
+	if credentialRequests != 1 {
+		t.Fatalf("expected single credential request, got %d", credentialRequests)
+	}
+	if mock.input == nil {
+		t.Fatalf("expected downloader input to be recorded")
+	}
+	if got := aws.ToString(mock.input.Bucket); got != "sentinel-bucket" {
+		t.Fatalf("unexpected bucket: %s", got)
+	}
+	if got := aws.ToString(mock.input.Key); got != "path/file.dat" {
+		t.Fatalf("unexpected key: %s", got)
+	}
+	if mock.cfg.Region != defaultS3Region {
+		t.Fatalf("expected region %s, got %s", defaultS3Region, mock.cfg.Region)
+	}
+
+	mock.content = []byte("s3data2")
+	dest2 := filepath.Join(t.TempDir(), "file2.dat")
+	if err := client.Download(ctx, product, dest2); err != nil {
+		t.Fatalf("second Download returned error: %v", err)
+	}
+	data2, err := os.ReadFile(dest2)
+	if err != nil {
+		t.Fatalf("ReadFile second: %v", err)
+	}
+	if string(data2) != "s3data2" {
+		t.Fatalf("unexpected s3 file contents: %q", data2)
+	}
+	if credentialRequests != 1 {
+		t.Fatalf("expected credentials reused, got %d requests", credentialRequests)
+	}
+}
+
 func TestDownloadMissingURL(t *testing.T) {
 	client := NewClient()
 	err := client.Download(context.Background(), Product{}, "ignored")
@@ -355,4 +428,22 @@ func TestParseTime(t *testing.T) {
 			t.Fatalf("parseTime failed for %s", tc)
 		}
 	}
+}
+
+type mockS3Downloader struct {
+	content []byte
+	input   *s3.GetObjectInput
+	cfg     aws.Config
+}
+
+func (m *mockS3Downloader) Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, _ ...func(*manager.Downloader)) (int64, error) {
+	copied := *input
+	m.input = &copied
+	if len(m.content) == 0 {
+		return 0, fmt.Errorf("no content configured")
+	}
+	if _, err := w.WriteAt(m.content, 0); err != nil {
+		return 0, err
+	}
+	return int64(len(m.content)), nil
 }

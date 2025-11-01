@@ -19,14 +19,25 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-const defaultBaseURL = "https://api.daac.asf.alaska.edu"
+const (
+	defaultBaseURL            = "https://api.daac.asf.alaska.edu"
+	defaultS3CredentialsURL   = "https://sentinel1.asf.alaska.edu/s3credentials"
+	defaultS3Region           = "us-west-2"
+	s3CredentialsRefreshSlack = 5 * time.Minute
+)
 
 // Client provides access to ASF Search endpoints and product downloads.
 type Client struct {
 	baseURL string
 	session *Session
+	s3      s3Provider
 }
 
 // Platform represents a supported mission/platform identifier recognized by ASF search APIs.
@@ -126,6 +137,9 @@ func WithHTTPClient(hc *http.Client) Option {
 			c.session = NewSession()
 		}
 		c.session.client = hc
+		if c.s3 != nil {
+			c.s3.setSession(c.session)
+		}
 	}
 }
 
@@ -141,6 +155,9 @@ func WithAuthenticator(auth Authenticator) Option {
 			c.session = NewSession()
 		}
 		c.session.authenticator = auth
+		if c.s3 != nil {
+			c.s3.setSession(c.session)
+		}
 	}
 }
 
@@ -148,20 +165,65 @@ func WithAuthenticator(auth Authenticator) Option {
 func WithSession(session *Session) Option {
 	return func(c *Client) {
 		c.session = session
+		if c.s3 != nil {
+			c.s3.setSession(session)
+		}
+	}
+}
+
+// WithS3CredentialsURL overrides the endpoint used to fetch temporary S3 credentials.
+func WithS3CredentialsURL(endpoint string) Option {
+	return func(c *Client) {
+		if endpoint == "" {
+			return
+		}
+		if c.s3 == nil {
+			c.s3 = newS3Config(endpoint, defaultS3Region)
+		} else if cfg, ok := c.s3.(*s3Config); ok {
+			cfg.endpoint = endpoint
+		}
+		if c.session != nil && c.s3 != nil {
+			c.s3.setSession(c.session)
+		}
+	}
+}
+
+// WithS3Region configures the default AWS region used for S3 downloads.
+func WithS3Region(region string) Option {
+	return func(c *Client) {
+		if region == "" {
+			return
+		}
+		if c.s3 == nil {
+			c.s3 = newS3Config(defaultS3CredentialsURL, region)
+		} else if cfg, ok := c.s3.(*s3Config); ok {
+			cfg.region = region
+		}
+		if c.session != nil && c.s3 != nil {
+			c.s3.setSession(c.session)
+		}
 	}
 }
 
 // NewClient creates a Client with sensible defaults.
 func NewClient(opts ...Option) *Client {
+	session := NewSession()
 	c := &Client{
 		baseURL: defaultBaseURL,
-		session: NewSession(),
+		session: session,
+		s3:      newS3Config(defaultS3CredentialsURL, defaultS3Region),
+	}
+	if c.s3 != nil {
+		c.s3.setSession(session)
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
 	if c.session == nil {
 		c.session = NewSession()
+	}
+	if c.s3 != nil {
+		c.s3.setSession(c.session)
 	}
 	return c
 }
@@ -482,6 +544,16 @@ var (
 )
 
 func (c *Client) downloadURL(ctx context.Context, downloadURL, destPath string) error {
+	parsed, err := url.Parse(downloadURL)
+	if err != nil {
+		return fmt.Errorf("asf: parse download URL: %w", err)
+	}
+	if strings.EqualFold(parsed.Scheme, "s3") {
+		if c.s3 == nil {
+			return fmt.Errorf("asf: s3 downloads not configured")
+		}
+		return c.s3.download(ctx, parsed, destPath)
+	}
 	if c.session == nil {
 		return fmt.Errorf("asf: client missing session")
 	}
@@ -676,6 +748,207 @@ func collectURLs(props featureProps) []string {
 	}
 	sort.Strings(urls)
 	return urls
+}
+
+type s3Provider interface {
+	setSession(*Session)
+	download(context.Context, *url.URL, string) error
+}
+
+type s3Downloader interface {
+	Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, optFns ...func(*manager.Downloader)) (int64, error)
+}
+
+type s3Config struct {
+	endpoint      string
+	region        string
+	session       *Session
+	mu            sync.Mutex
+	creds         aws.Credentials
+	expires       time.Time
+	downloaders   map[string]s3Downloader
+	newDownloader func(aws.Config) s3Downloader
+}
+
+func newS3Config(endpoint, region string) s3Provider {
+	if endpoint == "" {
+		endpoint = defaultS3CredentialsURL
+	}
+	if region == "" {
+		region = defaultS3Region
+	}
+	return &s3Config{
+		endpoint:    endpoint,
+		region:      region,
+		downloaders: make(map[string]s3Downloader),
+		newDownloader: func(cfg aws.Config) s3Downloader {
+			return manager.NewDownloader(s3.NewFromConfig(cfg))
+		},
+	}
+}
+
+func (s *s3Config) setSession(session *Session) {
+	s.session = session
+}
+
+func (s *s3Config) download(ctx context.Context, u *url.URL, destPath string) error {
+	if s == nil {
+		return fmt.Errorf("asf: s3 downloads not configured")
+	}
+	bucket := u.Host
+	if bucket == "" {
+		return fmt.Errorf("asf: s3 URL missing bucket")
+	}
+	key := strings.TrimPrefix(u.Path, "/")
+	if key == "" {
+		return fmt.Errorf("asf: s3 URL missing key")
+	}
+	downloader, err := s.downloader(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	tmp := destPath + ".part"
+	file, err := os.Create(tmp)
+	if err != nil {
+		return fmt.Errorf("asf: create temp file: %w", err)
+	}
+	success := false
+	defer func() {
+		file.Close()
+		if !success {
+			os.Remove(tmp)
+		}
+	}()
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}
+	if _, err := downloader.Download(ctx, file, input); err != nil {
+		return fmt.Errorf("asf: download s3 object: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("asf: sync file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("asf: close file: %w", err)
+	}
+	if err := os.Rename(tmp, destPath); err != nil {
+		return fmt.Errorf("asf: rename temp file: %w", err)
+	}
+	success = true
+	return nil
+}
+
+func (s *s3Config) downloader(ctx context.Context, bucket string) (s3Downloader, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureCredentials(ctx); err != nil {
+		return nil, err
+	}
+	region := s.region
+	if region == "" {
+		region = defaultS3Region
+	}
+	if s.downloaders == nil {
+		s.downloaders = make(map[string]s3Downloader)
+	}
+	if downloader, ok := s.downloaders[region]; ok {
+		return downloader, nil
+	}
+	cfg := aws.Config{
+		Region: region,
+		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+			s.creds.AccessKeyID, s.creds.SecretAccessKey, s.creds.SessionToken,
+		)),
+	}
+	factory := s.newDownloader
+	if factory == nil {
+		factory = func(cfg aws.Config) s3Downloader {
+			return manager.NewDownloader(s3.NewFromConfig(cfg))
+		}
+	}
+	downloader := factory(cfg)
+	s.downloaders[region] = downloader
+	return downloader, nil
+}
+
+func (s *s3Config) ensureCredentials(ctx context.Context) error {
+	if s.session == nil {
+		return fmt.Errorf("asf: client missing session")
+	}
+	if s.endpoint == "" {
+		return fmt.Errorf("asf: s3 credentials endpoint not configured")
+	}
+	if s.creds.AccessKeyID != "" && time.Until(s.expires) > s3CredentialsRefreshSlack {
+		return nil
+	}
+	if err := s.refreshCredentials(ctx); err != nil {
+		return err
+	}
+	s.downloaders = make(map[string]s3Downloader)
+	return nil
+}
+
+func (s *s3Config) refreshCredentials(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("asf: create s3 credentials request: %w", err)
+	}
+	resp, err := s.session.Do(req)
+	if err != nil {
+		return fmt.Errorf("asf: request s3 credentials: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("asf: s3 credentials unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+	var payload s3CredentialPayload
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		return fmt.Errorf("asf: decode s3 credentials: %w", err)
+	}
+	if payload.AccessKeyID == "" || payload.SecretAccessKey == "" || payload.SessionToken == "" {
+		return fmt.Errorf("asf: incomplete s3 credentials in response")
+	}
+	expires, err := parseS3Expiration(payload.Expiration)
+	if err != nil {
+		return err
+	}
+	s.creds = aws.Credentials{
+		AccessKeyID:     payload.AccessKeyID,
+		SecretAccessKey: payload.SecretAccessKey,
+		SessionToken:    payload.SessionToken,
+		Source:          "asf s3credentials",
+		CanExpire:       true,
+		Expires:         expires,
+	}
+	s.expires = expires
+	return nil
+}
+
+type s3CredentialPayload struct {
+	AccessKeyID     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
+	SessionToken    string `json:"sessionToken"`
+	Expiration      string `json:"expiration"`
+}
+
+func parseS3Expiration(value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, fmt.Errorf("asf: missing expiration in s3 credentials")
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02T15:04:05-07:00",
+	}
+	for _, layout := range layouts {
+		if ts, err := time.Parse(layout, value); err == nil {
+			return ts, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("asf: parse s3 expiration %q", value)
 }
 
 type numericValue float64
