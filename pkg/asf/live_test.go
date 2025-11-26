@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-asf/pkg/asf"
+	"github.com/robert-malhotra/go-asf/pkg/asf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

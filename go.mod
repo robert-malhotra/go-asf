@@ -1,4 +1,4 @@
-module github.com/example/go-asf
+module github.com/robert-malhotra/go-asf
 
 go 1.24.0
 

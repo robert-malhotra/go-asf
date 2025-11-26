@@ -13,7 +13,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/example/go-asf/pkg/asf"
+	"github.com/robert-malhotra/go-asf/pkg/asf"
 )
 
 func main() {
