@@ -1,0 +1,123 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    [
+                        [
+                            -126.904083,
+                            49.01503
+                        ],
+                        [
+                            -123.430382,
+                            49.412853
+                        ],
+                        [
+                            -123.829048,
+                            51.085098
+                        ],
+                        [
+                            -127.428642,
+                            50.685146
+                        ],
+                        [
+                            -126.904083,
+                            49.01503
+                        ]
+                    ]
+                ],
+                "type": "Polygon"
+            },
+            "properties": {
+                "centerLat": 50.0631,
+                "centerLon": -125.4036,
+                "stopTime": "2025-10-28T02:10:42Z",
+                "fileID": "S1C_IW_SLC__1SDV_20251028T021014_20251028T021042_004756_00963D_8B2E-SLC",
+                "flightDirection": "ASCENDING",
+                "pathNumber": 35,
+                "processingLevel": "SLC",
+                "url": "https://datapool.asf.alaska.edu/SLC/SC/S1C_IW_SLC__1SDV_20251028T021014_20251028T021042_004756_00963D_8B2E.zip",
+                "startTime": "2025-10-28T02:10:14Z",
+                "sceneName": "S1C_IW_SLC__1SDV_20251028T021014_20251028T021042_004756_00963D_8B2E",
+                "browse": null,
+                "platform": "Sentinel-1C",
+                "bytes": 4636443928,
+                "md5sum": "10f2083f7b859bde5fb985722c4fe0b0",
+                "frameNumber": 160,
+                "granuleType": "SENTINEL_1C_FRAME",
+                "orbit": 4756,
+                "polarization": "VV+VH",
+                "processingDate": "2025-10-28T02:10:14Z",
+                "sensor": "C-SAR",
+                "groupID": "S1C_IWDV_0160_0165_004756_035",
+                "pgeVersion": "004.00",
+                "fileName": "S1C_IW_SLC__1SDV_20251028T021014_20251028T021042_004756_00963D_8B2E.zip",
+                "beamModeType": "IW",
+                "s3Urls": [
+                    "s3://asf-ngap2w-p-s1-slc-7b420b89/S1C_IW_SLC__1SDV_20251028T021014_20251028T021042_004756_00963D_8B2E.zip"
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    [
+                        [
+                            -126.467957,
+                            47.527878
+                        ],
+                        [
+                            -123.092209,
+                            47.925228
+                        ],
+                        [
+                            -123.467285,
+                            49.540447
+                        ],
+                        [
+                            -126.955177,
+                            49.141628
+                        ],
+                        [
+                            -126.467957,
+                            47.527878
+                        ]
+                    ]
+                ],
+                "type": "Polygon"
+            },
+            "properties": {
+                "centerLat": 48.5466,
+                "centerLon": -125.0011,
+                "stopTime": "2025-10-28T02:10:16Z",
+                "fileID": "S1C_IW_SLC__1SDV_20251028T020950_20251028T021016_004756_00963D_4E6D-SLC",
+                "flightDirection": "ASCENDING",
+                "pathNumber": 35,
+                "processingLevel": "SLC",
+                "url": "https://datapool.asf.alaska.edu/SLC/SC/S1C_IW_SLC__1SDV_20251028T020950_20251028T021016_004756_00963D_4E6D.zip",
+                "startTime": "2025-10-28T02:09:50Z",
+                "sceneName": "S1C_IW_SLC__1SDV_20251028T020950_20251028T021016_004756_00963D_4E6D",
+                "browse": null,
+                "platform": "Sentinel-1C",
+                "bytes": 4159406165,
+                "md5sum": "19f9cb66385d5033edc9950234ad8ceb",
+                "frameNumber": 155,
+                "granuleType": "SENTINEL_1C_FRAME",
+                "orbit": 4756,
+                "polarization": "VV+VH",
+                "processingDate": "2025-10-28T02:09:50Z",
+                "sensor": "C-SAR",
+                "groupID": "S1C_IWDV_0155_0160_004756_035",
+                "pgeVersion": "004.00",
+                "fileName": "S1C_IW_SLC__1SDV_20251028T020950_20251028T021016_004756_00963D_4E6D.zip",
+                "beamModeType": "IW",
+                "s3Urls": [
+                    "s3://asf-ngap2w-p-s1-slc-7b420b89/S1C_IW_SLC__1SDV_20251028T020950_20251028T021016_004756_00963D_4E6D.zip"
+                ]
+            }
+        }
+    ]
+}
