@@ -11,9 +11,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"net/http"
-	"net/http/cookiejar"
-
 	"github.com/urfave/cli/v3"
 
 	"github.com/example/go-asf/pkg/asf"
@@ -142,7 +139,7 @@ func executeSearch(ctx context.Context, cmd *cli.Command) error {
 		RelativeOrbit:   strings.TrimSpace(cmd.String("relative-orbit")),
 		FlightDirection: asf.FlightDirection(strings.TrimSpace(cmd.String("flight-direction"))),
 		IntersectsWith:  strings.TrimSpace(cmd.String("intersects")),
-		GranuleIDs:      trimStrings(cmd.StringSlice("granule")),
+		GranuleIDs:      convertSlice[string](cmd.StringSlice("granule")),
 		Start:           start,
 		End:             end,
 		MaxResults:      cmd.Int("max-results"),
@@ -190,11 +187,6 @@ func buildClient(cmd *cli.Command) *asf.Client {
 	if token := strings.TrimSpace(root.String("token")); token != "" {
 		opts = append(opts, asf.WithAuthToken(token))
 	}
-	timeout := root.Duration("timeout")
-	if timeout < 0 {
-		timeout = 0
-	}
-	opts = append(opts, asf.WithHTTPClient(newHTTPClient(timeout)))
 	return asf.NewClient(opts...)
 }
 
@@ -261,40 +253,6 @@ func convertSlice[T ~string](values []string) []T {
 }
 
 func isMetadataProduct(props asf.Properties) bool {
-	if strings.EqualFold(props.ProcessingLevel, "METADATA") {
-		return true
-	}
-	if strings.HasSuffix(strings.ToLower(props.URL), ".iso.xml") {
-		return true
-	}
-	return false
-}
-
-func newHTTPClient(timeout time.Duration) *http.Client {
-	jar, _ := cookiejar.New(nil)
-	client := &http.Client{
-		Timeout: timeout,
-		Jar:     jar,
-	}
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) == 0 {
-			return nil
-		}
-		prev := via[len(via)-1]
-		if auth := prev.Header.Get("Authorization"); auth != "" {
-			req.Header.Set("Authorization", auth)
-		}
-		return nil
-	}
-	return client
-}
-
-func trimStrings(values []string) []string {
-	var result []string
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
+	return strings.EqualFold(props.ProcessingLevel, "METADATA") ||
+		strings.HasSuffix(strings.ToLower(props.URL), ".iso.xml")
 }
